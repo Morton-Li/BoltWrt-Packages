@@ -87,8 +87,8 @@ function s.create(...)
 end
 
 o = s:option(DummyValue, "type", translate("Type"))
-function o.cfgvalue(...)
-	return Value.cfgvalue(...)
+function o.cfgvalue(self, section)
+	return m:get(section, "v2ray_protocol") or Value.cfgvalue(self, section) or translate("None")
 end
 
 o = s:option(DummyValue, "alias", translate("Alias"))
@@ -104,13 +104,31 @@ end
 o = s:option(DummyValue, "server_port", translate("Socket Connected"))
 o.template = "shadowsocksr/socket"
 o.width = "10%"
+o.render = function(self, section, scope)
+	self.transport = s:cfgvalue(section).transport
+	if self.transport == 'ws' then
+		self.ws_path = s:cfgvalue(section).ws_path
+		self.tls = s:cfgvalue(section).tls
+	end
+	DummyValue.render(self, section, scope)
+end
 
 o = s:option(DummyValue, "server", translate("Ping Latency"))
 o.template = "shadowsocksr/ping"
 o.width = "10%"
 
+local global_server = uci:get_first('shadowsocksr', 'global', 'global_server') 
+
 node = s:option(Button, "apply_node", translate("Apply"))
 node.inputstyle = "apply"
+node.render = function(self, section, scope)
+	if section == global_server then
+		self.title = translate("Reapply")
+	else
+		self.title = translate("Apply")
+	end
+	Button.render(self, section, scope)
+end
 node.write = function(self, section)
 	uci:set("shadowsocksr", '@global[0]', 'global_server', section)
 	uci:save("shadowsocksr")

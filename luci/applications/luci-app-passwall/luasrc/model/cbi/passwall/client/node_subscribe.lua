@@ -24,13 +24,31 @@ o:value(7, translate("Every day"))
 for e = 1, 6 do o:value(e, translate("Week") .. e) end
 o:value(0, translate("Week") .. translate("day"))
 o.default = 0
-o:depends("auto_update_subscribe", 1)
+o:depends("auto_update_subscribe", true)
 
 ---- Day update rules
 o = s:option(ListValue, "time_update_subscribe", translate("Day update rules"))
 for e = 0, 23 do o:value(e, e .. translate("oclock")) end
 o.default = 0
-o:depends("auto_update_subscribe", 1)
+o:depends("auto_update_subscribe", true)
+
+o = s:option(ListValue, "filter_keyword_mode", translate("Filter keyword Mode"))
+o:value("0", translate("Close"))
+o:value("1", translate("Discard List"))
+o:value("2", translate("Keep List"))
+
+o = s:option(DynamicList, "filter_discard_list", translate("Discard List"))
+
+o = s:option(DynamicList, "filter_keep_list", translate("Keep List"))
+
+o = s:option(Flag, "allowInsecure", translate("allowInsecure"), translate("Whether unsafe connections are allowed. When checked, Certificate validation will be skipped."))
+o.default = "1"
+o.rmempty = false
+
+if api.is_finded("xray") and api.is_finded("trojan-plus") then
+    o = s:option(Flag, "trojan_xray", translate("Trojan Node Use Xray"))
+    o.default = "0"
+end
 
 ---- Manual subscription
 o = s:option(Button, "_update", translate("Manual subscription"))
@@ -48,20 +66,6 @@ function o.write(e, e)
     luci.http.redirect(api.url("log"))
 end
 
-filter_enabled = s:option(Flag, "filter_enabled", translate("Filter keyword switch"), translate("When checked, below options can only be take effect."))
-o.default = 1
-o.rmempty = false
-
-filter_keyword = s:option(DynamicList, "filter_keyword", translate("Filter keyword"))
-    
-o = s:option(Flag, "filter_keyword_discarded", translate("Filter keyword discarded"), translate("When checked, the keywords in the list are discarded. Otherwise, it is not discarded."))
-o.default = "1"
-o.rmempty = false
-
-o = s:option(Flag, "allowInsecure", translate("allowInsecure"), translate("Whether unsafe connections are allowed. When checked, Certificate validation will be skipped."))
-o.default = "1"
-o.rmempty = false
-
 s = m:section(TypedSection, "subscribe_list", "",
               "<font color='red'>" .. translate(
                   "Please input the subscription url first, save and submit before updating. If you subscribe to update, it is recommended to delete all subscriptions and then re-subscribe.") ..
@@ -72,11 +76,25 @@ s.sortable = true
 s.template = "cbi/tblsection"
 
 o = s:option(Flag, "enabled", translate("Enabled"))
+o.default = "1"
 o.rmempty = false
 
 o = s:option(Value, "remark", translate("Subscribe Remark"))
 o.width = "auto"
 o.rmempty = false
+
+o = s:option(DummyValue, "_node_count")
+o.rawhtml = true
+o.cfgvalue = function(t, n)
+    local remark = m:get(n, "remark") or ""
+    local num = 0
+    m.uci:foreach(appname, "nodes", function(s)
+        if s["add_from"] ~= "" and s["add_from"] == remark then
+            num = num + 1
+        end
+    end)
+    return string.format("<span title='%s' style='color:red'>%s</span>", remark .. " " .. translate("Node num") .. ": " .. num, num)
+end
 
 o = s:option(Value, "url", translate("Subscribe URL"))
 o.width = "auto"

@@ -1,7 +1,10 @@
-local sys = require "luci.sys"
-local appname = "passwall"
+local api = require "luci.model.cbi.passwall.api.api"
+local appname = api.appname
+local sys = api.sys
 
 m = Map(appname)
+
+local global_proxy_mode = (m:get("@global[0]", "tcp_proxy_mode") or "") .. (m:get("@global[0]", "udp_proxy_mode") or "")
 
 -- [[ ACLs Settings ]]--
 s = m:section(TypedSection, "acl_rule", translate("ACLs"), "<font color='red'>" .. translate("ACLs is a tools which used to designate specific IP proxy mode, IP or MAC address can be entered.") .. "</font>")
@@ -19,48 +22,60 @@ o.rmempty = false
 o = s:option(Value, "remarks", translate("Remarks"))
 o.rmempty = true
 
----- IP Address
-o = s:option(Value, "ip", translate("IP"))
-o.datatype = "ip4addr"
-o.rmempty = true
+o = s:option(Value, "ip_mac", translate("IP/MAC"))
+o.datatype = "or(ip4addr,macaddr)"
+o.rmempty = false
 
-local temp = {}
-for index, n in ipairs(luci.ip.neighbors({family = 4})) do
-    if n.dest then temp[index] = n.dest:string() end
+local mac_t = {}
+sys.net.mac_hints(function(e, t)
+    mac_t[#mac_t + 1] = {
+        ip = t,
+        mac = e
+    }
+end)
+table.sort(mac_t, function(a,b)
+    if #a.ip < #b.ip then
+        return true
+    elseif #a.ip == #b.ip then
+        if a.ip < b.ip then
+            return true
+        else
+            return #a.ip < #b.ip
+        end
+    end
+    return false
+end)
+for _, key in pairs(mac_t) do
+    o:value(key.mac, "%s (%s)" % {key.mac, key.ip})
 end
-local ips = {}
-for _, key in pairs(temp) do table.insert(ips, key) end
-table.sort(ips)
-
-for index, key in pairs(ips) do o:value(key, temp[key]) end
--- webadmin.cbi_add_knownips(o)
-
----- MAC Address
-o = s:option(Value, "mac", translate("MAC"))
-o.rmempty = true
-sys.net.mac_hints(function(e, t) o:value(e, "%s (%s)" % {e, t}) end)
 
 ---- TCP Proxy Mode
-o = s:option(ListValue, "tcp_proxy_mode", "TCP" .. translate("Proxy Mode"))
-o.default = "default"
-o.rmempty = false
-o:value("default", translate("Default"))
-o:value("disable", translate("No Proxy"))
-o:value("global", translate("Global Proxy"))
-o:value("gfwlist", translate("GFW List"))
-o:value("chnroute", translate("Not China List"))
-o:value("returnhome", translate("China List"))
+tcp_proxy_mode = s:option(ListValue, "tcp_proxy_mode", translatef("%s Proxy Mode", "TCP"))
+tcp_proxy_mode.default = "default"
+tcp_proxy_mode.rmempty = false
+tcp_proxy_mode:value("default", translate("Default"))
+tcp_proxy_mode:value("disable", translate("No Proxy"))
+tcp_proxy_mode:value("global", translate("Global Proxy"))
+if global_proxy_mode:find("returnhome") then
+    tcp_proxy_mode:value("returnhome", translate("China List"))
+else
+    tcp_proxy_mode:value("gfwlist", translate("GFW List"))
+    tcp_proxy_mode:value("chnroute", translate("Not China List"))
+end
 
 ---- UDP Proxy Mode
-o = s:option(ListValue, "udp_proxy_mode", "UDP" .. translate("Proxy Mode"))
-o.default = "default"
-o.rmempty = false
-o:value("default", translate("Default"))
-o:value("disable", translate("No Proxy"))
-o:value("global", translate("Global Proxy"))
-o:value("gfwlist", translate("GFW List"))
-o:value("chnroute", translate("Game Mode"))
-o:value("returnhome", translate("China List"))
+udp_proxy_mode = s:option(ListValue, "udp_proxy_mode", translatef("%s Proxy Mode", "UDP"))
+udp_proxy_mode.default = "default"
+udp_proxy_mode.rmempty = false
+udp_proxy_mode:value("default", translate("Default"))
+udp_proxy_mode:value("disable", translate("No Proxy"))
+udp_proxy_mode:value("global", translate("Global Proxy"))
+if global_proxy_mode:find("returnhome") then
+    udp_proxy_mode:value("returnhome", translate("China List"))
+else
+    udp_proxy_mode:value("gfwlist", translate("GFW List"))
+    udp_proxy_mode:value("chnroute", translate("Game Mode"))
+end
 
 ---- TCP No Redir Ports
 o = s:option(Value, "tcp_no_redir_ports", translate("TCP No Redir Ports"))

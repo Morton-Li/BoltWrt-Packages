@@ -1,4 +1,5 @@
-local appname = "passwall"
+local api = require "luci.model.cbi.passwall.api.api"
+local appname = api.appname
 
 m = Map(appname)
 
@@ -20,9 +21,6 @@ o.rmempty = false
 o = s:option(Value, "trojan_go_file", translatef("%s App Path", "Trojan-Go"))
 o.default = "/usr/bin/trojan-go"
 o.rmempty = false
-
-o = s:option(Value, "trojan_go_latest", translatef("Trojan-Go Version API"), translate("alternate API URL for version checking"))
-o.default = "https://api.github.com/repos/peter-tank/trojan-go/releases/latest"
 
 o = s:option(Value, "kcptun_client_file", translatef("%s Client App Path", "Kcptun"))
 o.default = "/usr/bin/kcptun-client"
