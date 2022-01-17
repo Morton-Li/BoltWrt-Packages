@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019-2021 Xingwang Liao
+# Copyright (C) 2019 Xingwang Liao
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=frp
 PKG_VERSION:=0.38.0
-PKG_RELEASE:=1
+PKG_RELEASE:=$(AUTORELESE)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/fatedier/frp/tar.gz/v$(PKG_VERSION)?
@@ -43,7 +43,7 @@ define frp/templates
 
   define Package/$(1)/description
   frp is a fast reverse proxy to help you expose a local server behind a NAT or firewall
-  to the internet. As of now, it supports tcp & udp, as well as httpand https protocols,
+  to the internet. As of now, it supports tcp & udp, as well as http and https protocols,
   where requests can be forwarded to internal services by domain name.
 
   This package contains the $(1).
@@ -54,6 +54,8 @@ define frp/templates
 
 	$$(INSTALL_DIR) $$(1)/usr/bin
 	$$(INSTALL_BIN) $$(PKG_INSTALL_DIR)/usr/bin/$(1) $$(1)/usr/bin/
+
+	$(STAGING_DIR_HOST)/bin/upx --lzma --best $$(1)/usr/bin/$(1) || true
   endef
 endef
 
