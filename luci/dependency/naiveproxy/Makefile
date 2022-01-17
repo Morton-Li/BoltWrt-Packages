@@ -5,12 +5,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=naiveproxy
-PKG_VERSION:=92.0.4515.107-1
+PKG_VERSION:=97.0.4692.71-1
 PKG_RELEASE:=$(AUTORELEASE)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/klzgrad/naiveproxy/tar.gz/v$(PKG_VERSION)?
-PKG_HASH:=d44e6d6efe2fe6ee0da9dafef427ee5971d4a253d8156ad8d7acab053d055463
+PKG_HASH:=10535dac472243ac55d709a185434c72cde976143809c9bac213b6a4a5f521a1
 
 PKG_LICENSE:=BSD 3-Clause
 PKG_LICENSE_FILES:=LICENSE
@@ -36,17 +36,13 @@ endif
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/naiveproxy/config
-	depends on !(arc||armeb||mips||mips64||powerpc)
-endef
-
 define Package/naiveproxy
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=Web Servers/Proxies
   URL:=https://github.com/klzgrad/naiveproxy
   TITLE:=Make a fortune quietly
-  DEPENDS:=+libatomic
+  DEPENDS:=@!(arc||(arm&&TARGET_gemini)||armeb||mips||mips64||powerpc) +libatomic
 endef
 
 define Package/naiveproxy/description
@@ -62,32 +58,32 @@ ifneq ($(CONFIG_CCACHE),)
   export naive_ccache_flags=cc_wrapper="$(CCACHE)"
 endif
 
-CLANG_VER:=13-init-10392-gd3676d4b-2
+CLANG_VER:=14-init-8033-gabb2a91b-2
 CLANG_FILE:=clang-llvmorg-$(CLANG_VER).tgz
 define Download/CLANG
 	URL:=https://commondatastorage.googleapis.com/chromium-browser-clang/Linux_x64
 	URL_FILE:=$(CLANG_FILE)
 	FILE:=$(CLANG_FILE)
-	HASH:=4eb2ca84afcb7afdf1d96badec12b66edf109dacd2f4e900774f4584dd9bd609
+	HASH:=720e10810f0005a4a8640728e72f06c283d4c51362f2889b513c6d6c3a136582
 endef
 
-GN_VER:=39a87c0b36310bdf06b692c098f199a0d97fc810
+GN_VER:=90294ccdcf9334ed25a76ac9b67689468e506342
 GN_FILE:=gn-git_revision-$(GN_VER).zip
 define Download/GN_TOOL
 	URL:=https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+
 	URL_FILE:=git_revision:$(GN_VER)
 	FILE:=$(GN_FILE)
-	HASH:=4c4400d81c00734f1b0ecd14b64ac3778dd939d29d807f13bd08a3c1f8ddc48b
+	HASH:=9cbfd56953d415a88dfae616191c0c37612a41f7fb09830d2952b8b5a59c7dec
 endef
 
-PGO_VER:=4515-1626533253-34e4718a21d6b148e3c9459b9f213fba5d58ef83
+PGO_VER:=4692-1640701189-f21838a98aa9a4bd13520a4261d2d77cbab9c3f3
 PGO_FILE:=chrome-linux-$(PGO_VER).profdata
 define Download/PGO_PROF
 	URL:=https://storage.googleapis.com.cnpmjs.org/chromium-optimization-profiles/pgo_profiles \
 	     https://storage.googleapis.com/chromium-optimization-profiles/pgo_profiles
 	URL_FILE:=$(PGO_FILE)
 	FILE:=$(PGO_FILE)
-	HASH:=3c2acbecdc2a8ba58709954f29858cb2cff38c703f5f3a296e8c160fcfb53caf
+	HASH:=8830cc810cdd1c4812a3cd009206bbf52f7c33a67b3280f62dd60cb684300e0f
 endef
 
 define Build/Prepare

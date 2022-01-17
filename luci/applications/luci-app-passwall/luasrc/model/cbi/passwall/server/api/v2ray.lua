@@ -1,5 +1,5 @@
-module("luci.model.cbi.passwall.server.api.xray", package.seeall)
-local ucic = require"luci.model.uci".cursor()
+module("luci.model.cbi.passwall.server.api.v2ray", package.seeall)
+local uci = require"luci.model.uci".cursor()
 
 function gen_config(user)
     local settings = nil
@@ -14,8 +14,7 @@ function gen_config(user)
             for i = 1, #user.uuid do
                 clients[i] = {
                     id = user.uuid[i],
-                    flow = ("1" == user.xtls) and user.flow or nil,
-                    alterId = user.alter_id and tonumber(user.alter_id) or nil
+                    flow = ("1" == user.xtls) and user.flow or nil
                 }
             end
             settings = {
@@ -25,13 +24,14 @@ function gen_config(user)
         end
     elseif user.protocol == "socks" then
         settings = {
+            udp = ("1" == user.udp_forward) and true or false,
             auth = ("1" == user.auth) and "password" or "noauth",
             accounts = ("1" == user.auth) and {
                 {
                     user = user.username,
                     pass = user.password
                 }
-            }
+            } or nil
         }
     elseif user.protocol == "http" then
         settings = {
@@ -41,7 +41,7 @@ function gen_config(user)
                     user = user.username,
                     pass = user.password
                 }
-            }
+            } or nil
         }
         user.transport = "tcp"
         user.tcp_guise = "none"
@@ -49,6 +49,7 @@ function gen_config(user)
         settings = {
             method = user.method,
             password = user.password,
+            ivCheck = ("1" == user.iv_check) and true or false,
             network = user.ss_network or "TCP,UDP"
         }
     elseif user.protocol == "trojan" then
@@ -117,10 +118,10 @@ function gen_config(user)
     }
 
     if user.transit_node and user.transit_node ~= "nil" then
-        local transit_node_t = ucic:get_all("passwall", user.transit_node)
+        local transit_node_t = uci:get_all("passwall", user.transit_node)
         if user.transit_node == "_socks" or user.transit_node == "_http" then
             transit_node_t = {
-                type = "Xray",
+                type = user.type,
                 protocol = user.transit_node:gsub("_", ""),
                 transport = "tcp",
                 address = user.transit_node_address,
@@ -129,8 +130,7 @@ function gen_config(user)
                 password = (user.transit_node_password and user.transit_node_password ~= "") and user.transit_node_password or nil,
             }
         end
-        local gen_xray = require("luci.model.cbi.passwall.api.gen_xray")
-        local outbound = gen_xray.gen_outbound(transit_node_t, "transit")
+        local outbound = require("luci.model.cbi.passwall.api.gen_v2ray").gen_outbound(transit_node_t, "transit")
         if outbound then
             table.insert(outbounds, 1, outbound)
         end
@@ -138,7 +138,7 @@ function gen_config(user)
 
     local config = {
         log = {
-            -- error = "/var/etc/passwall_server/log/" .. user[".name"] .. ".log",
+            -- error = "/tmp/etc/passwall_server/log/" .. user[".name"] .. ".log",
             loglevel = ("1" == user.log) and user.loglevel or "none"
         },
         -- 传入连接
@@ -236,7 +236,7 @@ function gen_config(user)
 
     if "1" == user.tls then
         config.inbounds[1].streamSettings.security = "tls"
-        if user.xtls and user.xtls == "1" then
+        if user.type == "Xray" and user.xtls and user.xtls == "1" then
             config.inbounds[1].streamSettings.security = "xtls"
             config.inbounds[1].streamSettings.tlsSettings = nil
         end
