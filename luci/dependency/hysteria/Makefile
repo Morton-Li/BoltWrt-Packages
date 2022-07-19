@@ -5,28 +5,23 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=hysteria
-PKG_VERSION:=0.9.4
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=$(AUTORELEASE)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/HyNetwork/hysteria/tar.gz/v$(PKG_VERSION)?
-PKG_HASH:=a1d248e3a4aa95e5a7cca7ea45153b4f8920c8d1455268934bfaeef0a72a2196
+PKG_HASH:=57ff13f50d134608c7bb001a11144f5ef7f395b3021eb6531daf486894fb4b9a
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILE:=LICENSE
 PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
-
-PKG_CONFIG_DEPENDS:= \
-	CONFIG_HYSTERIA_COMPRESS_GOPROXY \
-	CONFIG_HYSTERIA_COMPRESS_UPX
 
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
 
 GO_PKG:=github.com/tobyxdd/hysteria
-GO_PKG_BUILD_PKG:=github.com/tobyxdd/hysteria/cmd
-GO_PKG_LDFLAGS:=-s -w
+GO_PKG_BUILD_PKG:=$(GO_PKG)/cmd
 GO_PKG_LDFLAGS_X:=main.appVersion=$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
@@ -47,31 +42,9 @@ define Package/hysteria/description
   of QUIC protocol.
 endef
 
-define Package/hysteria/config
-config HYSTERIA_COMPRESS_GOPROXY
-	bool "Compiling with GOPROXY proxy"
-	default n
-
-config HYSTERIA_COMPRESS_UPX
-	bool "Compress executable files with UPX"
-	depends on !mips64
-	default n	
-endef
-
-ifeq ($(CONFIG_HYSTERIA_COMPRESS_GOPROXY),y)
-	export GO111MODULE=on
-	export GOPROXY=https://goproxy.baidu.com
-endif
-
-define Build/Compile
-	$(call GoPackage/Build/Compile)
-ifeq ($(CONFIG_HYSTERIA_COMPRESS_UPX),y)
-	$(STAGING_DIR_HOST)/bin/upx --lzma --best $(GO_PKG_BUILD_BIN_DIR)/cmd
-endif
-endef
-
 define Package/hysteria/install
 	$(call GoPackage/Package/Install/Bin,$(PKG_INSTALL_DIR))
+
 	$(INSTALL_DIR) $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/cmd $(1)/usr/bin/hysteria
 endef
