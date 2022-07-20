@@ -17,7 +17,7 @@ local datatypes = require "luci.cbi.datatypes"
 local tinsert = table.insert
 local ssub, slen, schar, sbyte, sformat, sgsub = string.sub, string.len, string.char, string.byte, string.format, string.gsub
 local jsonParse, jsonStringify = luci.jsonc.parse, luci.jsonc.stringify
-local b64decode = nixio.bin.b64decode
+local base64Decode = api.base64Decode
 local uci = luci.model.uci.cursor()
 uci:revert(appname)
 
@@ -27,7 +27,7 @@ local has_trojan_plus = api.is_finded("trojan-plus")
 local has_v2ray = api.is_finded("v2ray")
 local has_xray = api.is_finded("xray")
 local has_trojan_go = api.is_finded("trojan-go")
-local allowInsecure_default = true
+local allowInsecure_default = nil
 local ss_aead_type_default = uci:get(appname, "@global_subscribe[0]", "ss_aead_type") or "shadowsocks-libev"
 local trojan_type_default = uci:get(appname, "@global_subscribe[0]", "trojan_type") or "trojan-plus"
 -- 判断是否过滤节点关键字
@@ -81,10 +81,6 @@ end
 
 local nodeResult = {} -- update result
 local debug = false
-
-local ss_rust_encrypt_method_list = {
-    "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"
-}
 
 local log = function(...)
 	local result = os.date("%Y-%m-%d %H:%M:%S: ") .. table.concat({...}, " ")
@@ -228,7 +224,9 @@ do
 
 			local rules = {}
 			uci:foreach(appname, "shunt_rules", function(e)
-				table.insert(rules, e)
+				if e[".name"] and e.remarks then
+					table.insert(rules, e)
+				end
 			end)
 			table.insert(rules, {
 				[".name"] = "default_node",
@@ -350,22 +348,6 @@ local function trim(text)
 	return (sgsub(text, "^%s*(.-)%s*$", "%1"))
 end
 
--- base64
-local function base64Decode(text)
-	local raw = text
-	if not text then return '' end
-	text = text:gsub("%z", "")
-	text = text:gsub("_", "/")
-	text = text:gsub("-", "+")
-	local mod4 = #text % 4
-	text = text .. string.sub('====', mod4 + 1)
-	local result = b64decode(text)
-	if result then
-		return result:gsub("%z", "")
-	else
-		return raw
-	end
-end
 -- 处理数据
 local function processData(szType, content, add_mode, add_from)
 	--log(content, add_mode, add_from)
@@ -378,12 +360,16 @@ local function processData(szType, content, add_mode, add_from)
 		local dat = split(content, "/%?")
 		local hostInfo = split(dat[1], ':')
 		result.type = "SSR"
-		result.address = hostInfo[1]
-		result.port = hostInfo[2]
-		result.protocol = hostInfo[3]
-		result.method = hostInfo[4]
-		result.obfs = hostInfo[5]
-		result.password = base64Decode(hostInfo[6])
+		result.address = ""
+		for i=1,#hostInfo-5,1 do
+			result.address = result.address .. hostInfo[i] .. ":"
+		end
+		result.address = string.sub(result.address, 0, #result.address-1) 
+		result.port = hostInfo[#hostInfo-4]
+		result.protocol = hostInfo[#hostInfo-3]
+		result.method = hostInfo[#hostInfo-2]
+		result.obfs = hostInfo[#hostInfo-1]
+		result.password = base64Decode(hostInfo[#hostInfo])	
 		local params = {}
 		for _, v in pairs(split(dat[2], '&')) do
 			local t = split(v, '=')
@@ -508,25 +494,34 @@ local function processData(szType, content, add_mode, add_from)
 		result.method = method
 		result.password = password
 
-		local flag = false
-		for k, v in ipairs(ss_rust_encrypt_method_list) do
-			if method:upper() == v:upper() then
-				flag = true
+		local aead = false
+		for k, v in ipairs({"aes-128-gcm", "aes-256-gcm", "chacha20-poly1305", "chacha20-ietf-poly1305"}) do
+			if method:lower() == v:lower() then
+				aead = true
 			end
 		end
-		if flag then
+		if aead then
 			if ss_aead_type_default == "shadowsocks-libev" and has_ss then
 				result.type = "SS"
 			elseif ss_aead_type_default == "shadowsocks-rust" and has_ss_rust then
 				result.type = 'SS-Rust'
+				if method:lower() == "chacha20-poly1305" then
+					result.method = "chacha20-ietf-poly1305"
+				end
 			elseif ss_aead_type_default == "v2ray" and has_v2ray and not result.plugin then
 				result.type = 'V2ray'
 				result.protocol = 'shadowsocks'
 				result.transport = 'tcp'
+				if method:lower() == "chacha20-ietf-poly1305" then
+					result.method = "chacha20-poly1305"
+				end
 			elseif ss_aead_type_default == "xray" and has_xray and not result.plugin then
 				result.type = 'Xray'
 				result.protocol = 'shadowsocks'
 				result.transport = 'tcp'
+				if method:lower() == "chacha20-ietf-poly1305" then
+					result.method = "chacha20-poly1305"
+				end
 			end
 		end
 	elseif szType == "trojan" then
@@ -560,15 +555,11 @@ local function processData(szType, content, add_mode, add_from)
 				result.address = hostInfo and hostInfo[1] or Info[2]
 			end
 			local peer, sni = nil, ""
-			local allowInsecure = allowInsecure_default
 			local query = split(Info[2], "?")
 			local params = {}
 			for _, v in pairs(split(query[2], '&')) do
 				local t = split(v, '=')
 				params[string.lower(t[1])] = UrlDecode(t[2])
-			end
-			if params.allowinsecure then
-				allowInsecure = params.allowinsecure
 			end
 			if params.peer then peer = params.peer end
 			sni = params.sni and params.sni or ""
@@ -591,7 +582,16 @@ local function processData(szType, content, add_mode, add_from)
 			end
 			result.tls = '1'
 			result.tls_serverName = peer and peer or sni
-			result.tls_allowInsecure = allowInsecure and "1" or "0"
+			if params.allowinsecure then
+				if params.allowinsecure == "1" or params.allowinsecure == "0" then
+					result.tls_allowInsecure = params.allowinsecure
+				else
+					result.tls_allowInsecure = string.lower(params.allowinsecure) == "true" and "1" or "0"
+				end
+				log(result.remarks .. ' 使用节点AllowInsecure设定: '.. result.tls_allowInsecure)
+			else
+				result.tls_allowInsecure = allowInsecure_default and "1" or "0"
+			end
 		end
 		if trojan_type_default == "trojan-plus" and has_trojan_plus then
 			result.type = "Trojan-Plus"
@@ -766,6 +766,41 @@ local function processData(szType, content, add_mode, add_from)
 			result.port = port
 			result.tls_allowInsecure = allowInsecure_default and "1" or "0"
 		end
+	elseif szType == 'hysteria' then
+		local alias = ""
+		if content:find("#") then
+			local idx_sp = content:find("#")
+			alias = content:sub(idx_sp + 1, -1)
+			content = content:sub(0, idx_sp - 1)
+		end
+		result.remarks = UrlDecode(alias)
+		result.type = "Hysteria"
+		
+		local dat = split(content, '%?')
+		local hostInfo = split(dat[1], ':')
+		result.address = hostInfo[1]
+		result.port = hostInfo[2]
+		local params = {}
+		for _, v in pairs(split(dat[2], '&')) do
+			local t = split(v, '=')
+			if #t > 0 then
+				params[t[1]] = t[2]
+			end
+		end
+		result.protocol = params.protocol
+		result.hysteria_obfs = params.obfsParam
+		result.hysteria_auth_type = "string"
+		result.hysteria_auth_password = params.auth
+		result.tls_serverName = params.peer
+		if params.insecure and (params.insecure == "1" or params.insecure == "0") then
+			result.tls_allowInsecure = params.insecure
+			log(result.remarks ..' 使用节点AllowInsecure设定: '.. result.tls_allowInsecure)
+		else
+			result.tls_allowInsecure = allowInsecure_default and "1" or "0"
+		end
+		result.hysteria_alpn = params.alpn
+		result.hysteria_up_mbps = params.upmbps
+		result.hysteria_down_mbps = params.downmbps
 	else
 		log('暂时不支持' .. szType .. "类型的节点订阅，跳过此节点。")
 		return nil
@@ -1070,7 +1105,7 @@ local function parse_link(raw, add_mode, add_from)
 				if result then
 					if not result.type then
 						log('丢弃节点:' .. result.remarks .. ",找不到可使用二进制.")
-					elseif (add_mode == "2" and is_filter_keyword(result.remarks)) or not result.address or result.remarks == "NULL" or
+					elseif (add_mode == "2" and is_filter_keyword(result.remarks)) or not result.address or result.remarks == "NULL" or result.address=="127.0.0.1" or
 							(not datatypes.hostname(result.address) and not (datatypes.ipmask4(result.address) or datatypes.ipmask6(result.address))) then
 						log('丢弃过滤节点: ' .. result.type .. ' 节点, ' .. result.remarks)
 					else
@@ -1111,8 +1146,8 @@ local execute = function()
 			local cfgid = value[".name"]
 			local remark = value.remark
 			local url = value.url
-			if value.allowInsecure and value.allowInsecure ~= "1" then
-				allowInsecure_default = nil
+			if value.allowInsecure and value.allowInsecure == "1" then
+				allowInsecure_default = true
 			end
 			local filter_keyword_mode = value.filter_keyword_mode or "5"
 			if filter_keyword_mode == "0" then
@@ -1153,7 +1188,7 @@ local execute = function()
 			else
 				retry[#retry + 1] = value
 			end
-			allowInsecure_default = true
+			allowInsecure_default = nil
 			filter_keyword_mode_default = uci:get(appname, "@global_subscribe[0]", "filter_keyword_mode") or "0"
 			filter_keyword_discard_list_default = uci:get(appname, "@global_subscribe[0]", "filter_discard_list") or {}
 			filter_keyword_keep_list_default = uci:get(appname, "@global_subscribe[0]", "filter_keep_list") or {}
