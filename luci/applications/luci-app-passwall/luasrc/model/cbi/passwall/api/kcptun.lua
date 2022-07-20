@@ -1,20 +1,20 @@
-module("luci.model.cbi.passwall.api.v2ray", package.seeall)
+module("luci.model.cbi.passwall.api.kcptun", package.seeall)
 local api = require "luci.model.cbi.passwall.api.api"
 local fs = api.fs
 local sys = api.sys
 local util = api.util
 local i18n = api.i18n
 
-local pre_release_url = "https://api.github.com/repos/v2fly/v2ray-core/releases?per_page=1"
-local release_url = "https://api.github.com/repos/v2fly/v2ray-core/releases/latest"
+local pre_release_url = "https://api.github.com/repos/xtaci/kcptun/releases?per_page=1"
+local release_url = "https://api.github.com/repos/xtaci/kcptun/releases/latest"
 local api_url = release_url
-local app_path = api.get_v2ray_path() or ""
+local app_path = api.get_kcptun_path() or ""
 
 function check_path()
     if app_path == "" then
         return {
             code = 1,
-            error = i18n.translatef("You did not fill in the %s path. Please save and apply then update manually.", "V2ray")
+            error = i18n.translatef("You did not fill in the %s path. Please save and apply then update manually.", "Kcptun")
         }
     end
     return {
@@ -39,13 +39,7 @@ function to_check(arch)
         }
     end
 
-    if file_tree == "amd64" then file_tree = "64" end
-    if file_tree == "386" then file_tree = "32" end
-    if file_tree == "mipsle" then file_tree = "mips32le" end
-    if file_tree == "mips" then file_tree = "mips32" end
-    if file_tree == "arm" then file_tree = "arm32" end
-
-    return api.common_to_check(api_url, api.get_v2ray_version(), "linux%-" .. file_tree .. (sub_version ~= "" and ".+" .. sub_version or ""))
+    return api.common_to_check(api_url, api.get_kcptun_version(), "linux%-" .. file_tree .. sub_version)
 end
 
 function to_download(url, size)
@@ -58,9 +52,9 @@ function to_download(url, size)
         return {code = 1, error = i18n.translate("Download url is required.")}
     end
 
-    sys.call("/bin/rm -f /tmp/v2ray_download.*")
+    sys.call("/bin/rm -f /tmp/kcptun_download.*")
 
-    local tmp_file = util.trim(util.exec("mktemp -u -t v2ray_download.XXXXXX"))
+    local tmp_file = util.trim(util.exec("mktemp -u -t kcptun_download.XXXXXX"))
 
     if size then
         local kb1 = api.get_free_space("/tmp")
@@ -92,15 +86,7 @@ function to_extract(file, subfix)
         return {code = 1, error = i18n.translate("File path required.")}
     end
 
-    if sys.exec("echo -n $(opkg list-installed | grep -c unzip)") ~= "1" then
-        api.exec("/bin/rm", {"-f", file})
-        return {
-            code = 1,
-            error = i18n.translate("Not installed unzip, Can't unzip!")
-        }
-    end
-
-    sys.call("/bin/rm -rf /tmp/v2ray_extract.*")
+    sys.call("/bin/rm -rf /tmp/kcptun_extract.*")
 
     local new_file_size = api.get_file_space(file)
     local tmp_free_size = api.get_free_space("/tmp")
@@ -108,17 +94,41 @@ function to_extract(file, subfix)
         return {code = 1, error = i18n.translatef("%s not enough space.", "/tmp")}
     end
 
-    local tmp_dir = util.trim(util.exec("mktemp -d -t v2ray_extract.XXXXXX"))
+    local tmp_dir = util.trim(util.exec("mktemp -d -t kcptun_extract.XXXXXX"))
 
     local output = {}
-    api.exec("/usr/bin/unzip", {"-o", file, "v2ray", "-d", tmp_dir},
+    api.exec("/bin/tar", {"-C", tmp_dir, "-zxvf", file},
              function(chunk) output[#output + 1] = chunk end)
-
     local files = util.split(table.concat(output))
 
     api.exec("/bin/rm", {"-f", file})
 
-    return {code = 0, file = tmp_dir}
+    local new_file = nil
+    for _, f in pairs(files) do
+        if f:match("client_linux_%s" % subfix) then
+            new_file = tmp_dir .. "/" .. util.trim(f)
+            break
+        end
+    end
+
+    if not new_file then
+        for _, f in pairs(files) do
+            if f:match("client_") then
+                new_file = tmp_dir .. "/" .. util.trim(f)
+                break
+            end
+        end
+    end
+
+    if not new_file then
+        api.exec("/bin/rm", {"-rf", tmp_dir})
+        return {
+            code = 1,
+            error = i18n.translatef("Can't find client in file: %s", file)
+        }
+    end
+
+    return {code = 0, file = new_file}
 end
 
 function to_move(file)
@@ -127,23 +137,21 @@ function to_move(file)
         return result
     end
 
-    if not file or file == "" then
-        sys.call("/bin/rm -rf /tmp/v2ray_extract.*")
+    if not file or file == "" or not fs.access(file) then
+        sys.call("/bin/rm -rf /tmp/kcptun_extract.*")
         return {code = 1, error = i18n.translate("Client file is required.")}
     end
 
-    local bin_path = file .. "/v2ray"
-
-    local new_version = api.get_v2ray_version(bin_path)
+    local new_version = api.get_kcptun_version(file)
     if new_version == "" then
-        sys.call("/bin/rm -rf /tmp/v2ray_extract.*")
+        sys.call("/bin/rm -rf /tmp/kcptun_extract.*")
         return {
             code = 1,
             error = i18n.translate("The client file is not suitable for current device.")
         }
     end
 
-    local flag = sys.call('pgrep -af "passwall/.*v2ray" >/dev/null')
+    local flag = sys.call('pgrep -af "passwall/.*kcptun" >/dev/null')
     if flag == 0 then
         sys.call("/etc/init.d/passwall stop")
     end
@@ -152,20 +160,20 @@ function to_move(file)
     if fs.access(app_path) then
         old_app_size = api.get_file_space(app_path)
     end
-    local new_app_size = api.get_file_space(bin_path)
+    local new_app_size = api.get_file_space(file)
     local final_dir = api.get_final_dir(app_path)
     local final_dir_free_size = api.get_free_space(final_dir)
     if final_dir_free_size > 0 then
         final_dir_free_size = final_dir_free_size + old_app_size
         if new_app_size > final_dir_free_size then
-            sys.call("/bin/rm -rf /tmp/v2ray_extract.*")
+            sys.call("/bin/rm -rf /tmp/kcptun_extract.*")
             return {code = 1, error = i18n.translatef("%s not enough space.", final_dir)}
         end
     end
 
-    result = api.exec("/bin/mv", { "-f", bin_path, app_path }, nil, api.command_timeout) == 0
+    result = api.exec("/bin/mv", {"-f", file, app_path}, nil, api.command_timeout) == 0
 
-    sys.call("/bin/rm -rf /tmp/v2ray_extract.*")
+    sys.call("/bin/rm -rf /tmp/kcptun_extract.*")
     if flag == 0 then
         sys.call("/etc/init.d/passwall restart >/dev/null 2>&1 &")
     end
