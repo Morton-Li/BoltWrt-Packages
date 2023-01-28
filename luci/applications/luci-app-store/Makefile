@@ -1,38 +1,52 @@
-# Copyright (C) 2016 Openwrt.org
+# 
+# Copyright (C) 2006-2012 OpenWrt.org
 #
-# This is free software, licensed under the Apache License, Version 2.0 .
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
 #
 
 include $(TOPDIR)/rules.mk
 
-LUCI_TITLE:=LuCI based ipk store
-LUCI_DESCRIPTION:=luci-app-store is a ipk store developed by LinkEase team
-LUCI_DEPENDS:=+curl +opkg +luci-base +tar +coreutils +coreutils-stat +libuci-lua +mount-utils +luci-lib-taskd
-LUCI_EXTRA_DEPENDS:=luci-lib-taskd (>=1.0.17)
-LUCI_PKGARCH:=all
+PKG_NAME:=app-store-ui
+PKG_VERSION:=1.0
+PKG_RELEASE:=10
 
-PKG_VERSION:=0.1.12-9
-# PKG_RELEASE MUST be empty for luci.mk
-PKG_RELEASE:=
+PKG_HOST_ONLY=1
 
-ISTORE_UI_VERSION:=0.1.12
-ISTORE_UI_RELEASE:=5
-PKG_HASH:=23279d9fa532bbe6a66c4523cfee617d098a6e9a797e4c7e5c07c52b04434047
+HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/${PKG_NAME}
 
-PKG_SOURCE_URL_FILE:=v$(ISTORE_UI_VERSION)-$(ISTORE_UI_RELEASE).tar.gz
-PKG_SOURCE:=istore-ui-$(PKG_SOURCE_URL_FILE)
-PKG_SOURCE_URL:=https://github.com/linkease/istore-ui/archive/refs/tags
+include $(INCLUDE_DIR)/host-build.mk
+include $(INCLUDE_DIR)/package.mk
 
-PKG_MAINTAINER:=jjm2473 <jjm2473@gmail.com>
-
-TARGET_CONFIGURE_OPTS= FRONTEND_DIST="$(BUILD_DIR)/istore-ui-$(ISTORE_UI_VERSION)-$(ISTORE_UI_RELEASE)/app-store-ui/src/dist" APP_STORE_VERSION="$(PKG_VERSION)"
-TARGET_CONFIGURE_OPTS+= SED="$(SED)"
-
-define Package/luci-app-store/conffiles
-/etc/.app_store.id
+define Package/app-store-ui
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=App Store UI
+  BUILDONLY:=1
 endef
 
-include $(TOPDIR)/feeds/luci/luci.mk
+define Package/app-store-ui/description
+ UI for luci-app-store
+endef
 
-# call BuildPackage - OpenWrt buildroot signature
+define Host/Prepare
+	mkdir -p $(HOST_BUILD_DIR)
+	$(CP) ./src/. $(HOST_BUILD_DIR)
+	find $(HOST_BUILD_DIR) -name .svn | $(XARGS) rm -rf
+endef
 
+define Host/Configure
+endef
+
+define Host/Compile
+endef
+
+define Host/Install
+endef
+
+define Host/Clean
+	rm -f $(HOST_BUILD_DIR)/src/dist
+endef
+
+$(eval $(call HostBuild))
+$(eval $(call BuildPackage,app-store-ui))
