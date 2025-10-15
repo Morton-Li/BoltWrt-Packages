@@ -7,6 +7,3 @@
 [submodule "luci/applications/luci-app-smartdns"]
 	path = luci/applications/luci-app-smartdns
 	url = https://github.com/pymumu/luci-app-smartdns.git
-[submodule "net/ddns-scripts_aliyun"]
-	path = net/ddns-scripts_aliyun
-	url = https://github.com/sensec/ddns-scripts_aliyun.git
